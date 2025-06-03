@@ -2,7 +2,7 @@ require("dotenv").config();
 
 const {
   TYPE,
-  PROYECT_ID,
+  PROJECT_ID,
   PRIVATE_KEY_ID,
   PRIVATE_KEY,
   CLIENT_EMAIL,
@@ -16,7 +16,7 @@ const {
 
 const firebaseConfig = {
   type: TYPE,
-  project_id: PROYECT_ID,
+  project_id: PROJECT_ID,
   private_key_id: PRIVATE_KEY_ID,
   private_key: PRIVATE_KEY.replace(/\\n/g, '\n'),
   client_email: CLIENT_EMAIL,
