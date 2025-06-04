@@ -1,7 +1,7 @@
 const cloudinary = require('cloudinary').v2;
 require('dotenv').config();
 
-const{CLOUD_NAME,CLOUD_KEY,API_SECRET}= process.env;
+const{CLOUD_NAME,CLOUD_KEY,API_SECRET,CLOUD_FOLDER}= process.env;
 
 cloudinary.config({
     cloud_name: CLOUD_NAME,
@@ -12,7 +12,7 @@ cloudinary.config({
 
 const uploadImage = async (filePath)=>{
     return await cloudinary.uploader.upload(filePath,{
-        folder:'elfestinonline'
+        folder: CLOUD_FOLDER,
     })
 }
 
