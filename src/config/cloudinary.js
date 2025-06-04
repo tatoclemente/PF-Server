@@ -9,7 +9,6 @@ cloudinary.config({
     api_secret:API_SECRET
 });
 
-
 const uploadImage = async (filePath)=>{
     return await cloudinary.uploader.upload(filePath,{
         folder: CLOUD_FOLDER,
