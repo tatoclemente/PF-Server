@@ -3,7 +3,6 @@ const cookieParser = require("cookie-parser");
 const bodyParser = require("body-parser");
 const morgan = require("morgan");
 const mainRouter = require("./routes");
-const fillDb = require("./mocks");
 const fileUpload = require("express-fileupload");
 require("./db.js");
 
@@ -84,8 +83,8 @@ server.use((err, req, res, next) => {
   res.status(status).send(message);
 });
 
-const app = createServer(server);
-const { Server } = require('socket.io');
+// const app = createServer(server);
+// const { Server } = require('socket.io');
 /*const io = new Server(app, {
   cors: {
     origin: ["http://localhost:3000"],
@@ -94,4 +93,4 @@ const { Server } = require('socket.io');
  
 
 //fillDb();
-module.exports =  {app};
+module.exports = { app: server };
