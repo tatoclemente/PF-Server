@@ -21,6 +21,7 @@ async function startServer() {
     console.log('✅ Database connection established');
     
     // Luego sincroniza las tablas
+    
     await conn.sync({ alter: true });
     console.log('✅ Database models synced');
 
