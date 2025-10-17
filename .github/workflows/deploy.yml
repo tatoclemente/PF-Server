@@ -14,6 +14,10 @@ env:
   PROJECT_ID: el-festin-server
   REGION: us-east1
 
+permissions:
+  contents: write
+  pull-requests: write
+
 jobs:
   # Job 1: Linting
   lint:
