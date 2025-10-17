@@ -64,14 +64,13 @@ jobs:
     needs: [lint, test]
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Build Docker image
-      run: docker build -t test-image .
-    
-    # Opcional: Solo verifica que construye, no que corre
-    - name: Verify image was created
-      run: docker images | grep test-image
+      - uses: actions/checkout@v4
+      
+      - name: Build Docker image
+        run: docker build -t test-image .
+      
+      - name: Verify image was created
+        run: docker images | grep test-image
 
   # Job 4: Deploy to Staging (branch develop)
   deploy-staging:
@@ -81,7 +80,6 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
     environment:
       name: staging
-      url: https://backend-express-staging-xxxxx.run.app
     
     steps:
       - uses: actions/checkout@v4
@@ -94,15 +92,25 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
       
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker us-east1-docker.pkg.dev
+      
+      - name: Build Docker Image
+        run: docker build -t us-east1-docker.pkg.dev/el-festin-server/cloud-run-source-deploy/backend-staging:${{ github.sha }} .
+      
+      - name: Push to Artifact Registry
+        run: |
+          docker push us-east1-docker.pkg.dev/el-festin-server/cloud-run-source-deploy/backend-staging:${{ github.sha }}
+          docker tag us-east1-docker.pkg.dev/el-festin-server/cloud-run-source-deploy/backend-staging:${{ github.sha }} \
+                     us-east1-docker.pkg.dev/el-festin-server/cloud-run-source-deploy/backend-staging:latest
+          docker push us-east1-docker.pkg.dev/el-festin-server/cloud-run-source-deploy/backend-staging:latest
+      
       - name: Deploy to Cloud Run (Staging)
         run: |
           gcloud run deploy backend-express-staging \
-            --source . \
+            --image us-east1-docker.pkg.dev/el-festin-server/cloud-run-source-deploy/backend-staging:${{ github.sha }} \
             --platform managed \
-            --region ${{ env.REGION }} \
-            --port 8080 \
-            --memory 512Mi \
-            --set-env-vars="NODE_ENV=staging" \
+            --region us-east1 \
             --allow-unauthenticated
 
   # Job 5: Deploy to Production (branch main)
@@ -113,7 +121,6 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     environment:
       name: production
-      url: https://backend-express-v1-xxxxx.run.app
     
     steps:
       - uses: actions/checkout@v4
@@ -126,9 +133,11 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
       
+      - name: Configure Docker for GCR
+        run: gcloud auth configure-docker
+      
       - name: Build and Push to GCR
         run: |
-          gcloud auth configure-docker
           docker build -t gcr.io/${{ env.PROJECT_ID }}/backend-express-v1:${{ github.sha }} .
           docker tag gcr.io/${{ env.PROJECT_ID }}/backend-express-v1:${{ github.sha }} \
                      gcr.io/${{ env.PROJECT_ID }}/backend-express-v1:latest
@@ -141,12 +150,7 @@ jobs:
             --image gcr.io/${{ env.PROJECT_ID }}/backend-express-v1:${{ github.sha }} \
             --platform managed \
             --region ${{ env.REGION }} \
-            --port 8080 \
-            --timeout 300 \
-            --memory 1Gi \
-            --allow-unauthenticated \
-            --set-secrets="DATABASE_URL=database-url:latest,FIREBASE_CREDENTIALS=firebase-credentials:latest" \
-            --set-env-vars="NODE_ENV=production"
+            --allow-unauthenticated
       
       - name: Create Release
         uses: actions/create-release@v1
@@ -172,3 +176,4 @@ jobs:
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
           SLACK_MESSAGE: 'Deployment completed!'
+        continue-on-error: true

@@ -102,6 +102,7 @@ dist
 
 # TernJS port file
 .tern-port
-
 env.yaml
 key.json
+firebase-creds.json
+firebase-*.json
