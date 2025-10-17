@@ -1,0 +1,179 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+      - develop
+
+env:
+  PROJECT_ID: el-festin-server
+  REGION: us-east1
+
+jobs:
+  # Job 1: Linting
+  lint:
+    name: Code Linting
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Run ESLint
+        run: npm run lint
+        continue-on-error: true
+
+  # Job 2: Unit Tests
+  test:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Run tests
+        run: npm test
+      
+      - name: Upload coverage
+        uses: codecov/codecov-action@v3
+        if: always()
+
+  # Job 3: Build Docker image
+  build:
+    name: Build Docker Image
+    needs: [lint, test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Build Docker image
+        run: docker build -t test-image .
+      
+      - name: Verify image was created
+        run: docker images | grep test-image
+
+  # Job 4: Deploy to Staging (branch develop)
+  deploy-staging:
+    name: Deploy to Staging
+    needs: [lint, test, build]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    environment:
+      name: staging
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+      
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+      
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker us-east1-docker.pkg.dev
+      
+      - name: Build Docker Image
+        run: docker build -t us-east1-docker.pkg.dev/el-festin-server/cloud-run-source-deploy/backend-staging:${{ github.sha }} .
+      
+      - name: Push to Artifact Registry
+        run: |
+          docker push us-east1-docker.pkg.dev/el-festin-server/cloud-run-source-deploy/backend-staging:${{ github.sha }}
+          docker tag us-east1-docker.pkg.dev/el-festin-server/cloud-run-source-deploy/backend-staging:${{ github.sha }} \
+                     us-east1-docker.pkg.dev/el-festin-server/cloud-run-source-deploy/backend-staging:latest
+          docker push us-east1-docker.pkg.dev/el-festin-server/cloud-run-source-deploy/backend-staging:latest
+      
+      - name: Deploy to Cloud Run (Staging)
+        run: |
+          gcloud run deploy backend-express-staging \
+            --image us-east1-docker.pkg.dev/el-festin-server/cloud-run-source-deploy/backend-staging:${{ github.sha }} \
+            --platform managed \
+            --region us-east1 \
+            --allow-unauthenticated
+
+  # Job 5: Deploy to Production (branch main)
+  deploy-production:
+    name: Deploy to Production
+    needs: [lint, test, build]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    environment:
+      name: production
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+      
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+      
+      - name: Configure Docker for GCR
+        run: gcloud auth configure-docker
+      
+      - name: Build and Push to GCR
+        run: |
+          docker build -t gcr.io/${{ env.PROJECT_ID }}/backend-express-v1:${{ github.sha }} .
+          docker tag gcr.io/${{ env.PROJECT_ID }}/backend-express-v1:${{ github.sha }} \
+                     gcr.io/${{ env.PROJECT_ID }}/backend-express-v1:latest
+          docker push gcr.io/${{ env.PROJECT_ID }}/backend-express-v1:${{ github.sha }}
+          docker push gcr.io/${{ env.PROJECT_ID }}/backend-express-v1:latest
+      
+      - name: Deploy to Cloud Run (Production)
+        run: |
+          gcloud run deploy backend-express-v1 \
+            --image gcr.io/${{ env.PROJECT_ID }}/backend-express-v1:${{ github.sha }} \
+            --platform managed \
+            --region ${{ env.REGION }} \
+            --allow-unauthenticated
+      
+      - name: Create Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ github.run_number }}
+          release_name: Release v${{ github.run_number }}
+          body: |
+            Automated release from commit ${{ github.sha }}
+          draft: false
+          prerelease: false
+
+  # Job 6: Notify on Slack/Discord (opcional)
+  notify:
+    name: Send Notification
+    needs: [deploy-production]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Slack Notification
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_MESSAGE: 'Deployment completed!'
+        continue-on-error: true

@@ -10,6 +10,11 @@ const { DB_USER, DB_PASSWORD, DB_HOST, DATABASE_URL } = process.env;
 //   logging: false, // set to console.log to see the raw SQL queries
 //   native: false, // lets Sequelize know we can use pg-native for ~30% more speed
 // });
+if (!DATABASE_URL) {
+  console.error("❌ DATABASE_URL no definida");
+  process.exit(1);
+}
+
 const sequelize = new Sequelize(DATABASE_URL, {
   logging: false, // set to console.log to see the raw SQL queries
   native: false, // lets Sequelize know we can use pg-native for ~30% more speed

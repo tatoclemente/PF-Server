@@ -102,6 +102,7 @@ dist
 
 # TernJS port file
 .tern-port
-
-# package-lock.json
-package-lock.json
+env.yaml
+key.json
+firebase-creds.json
+firebase-*.json
